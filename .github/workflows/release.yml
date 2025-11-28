@@ -1,0 +1,222 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+  build-release:
+    name: Build Release
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: glint
+            asset_name: glint-linux-x86_64
+
+          # Linux x86_64 (musl for static linking)
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact_name: glint
+            asset_name: glint-linux-x86_64-musl
+
+          # macOS x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: glint
+            asset_name: glint-macos-x86_64
+
+          # macOS ARM64 (Apple Silicon)
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: glint
+            asset_name: glint-macos-aarch64
+
+          # Windows x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: glint.exe
+            asset_name: glint-windows-x86_64.exe
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install protobuf compiler (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install musl-tools (for musl target)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get install -y musl-tools
+
+      - name: Install protobuf compiler (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install protobuf
+
+      - name: Install protobuf compiler (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install protoc
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }} --bin glint --features bundled
+
+      - name: Strip binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+      - name: Create tarball (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ${{ matrix.asset_name }}.tar.gz ${{ matrix.artifact_name }}
+          mv ${{ matrix.asset_name }}.tar.gz ../../..
+
+      - name: Create zip (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ${{ matrix.asset_name }}.zip ${{ matrix.artifact_name }}
+          mv ${{ matrix.asset_name }}.zip ../../..
+
+      - name: Upload Release Asset (Unix)
+        if: matrix.os != 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./${{ matrix.asset_name }}.tar.gz
+          asset_name: ${{ matrix.asset_name }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Release Asset (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./${{ matrix.asset_name }}.zip
+          asset_name: ${{ matrix.asset_name }}.zip
+          asset_content_type: application/zip
+
+  build-packages:
+    name: Build Linux Packages
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Install cargo-generate-rpm
+        run: cargo install cargo-generate-rpm
+
+      - name: Build .deb package
+        run: cargo deb -p glint-cli --features bundled
+
+      - name: Build binary for RPM
+        run: cargo build --release --bin glint --features bundled
+
+      - name: Build .rpm package
+        run: cargo generate-rpm -p glint-cli
+
+      - name: Find package files
+        id: find_packages
+        run: |
+          DEB_FILE=$(find target/debian -name "*.deb" | head -1)
+          RPM_FILE=$(find target/generate-rpm -name "*.rpm" | head -1)
+          echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
+          echo "rpm_file=$RPM_FILE" >> $GITHUB_OUTPUT
+
+      - name: Upload .deb package
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.find_packages.outputs.deb_file }}
+          asset_name: glint_${{ needs.create-release.outputs.version }}_amd64.deb
+          asset_content_type: application/vnd.debian.binary-package
+
+      - name: Upload .rpm package
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.find_packages.outputs.rpm_file }}
+          asset_name: glint-${{ needs.create-release.outputs.version }}-1.x86_64.rpm
+          asset_content_type: application/x-rpm
+
+  publish-crate:
+    name: Publish to crates.io
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          cargo publish -p glint --token $CARGO_REGISTRY_TOKEN
+          sleep 10
+          cargo publish -p glint-collector --token $CARGO_REGISTRY_TOKEN
+          sleep 10
+          cargo publish -p glint-server --token $CARGO_REGISTRY_TOKEN
+          sleep 10
+          cargo publish -p glint-cli --token $CARGO_REGISTRY_TOKEN

@@ -1,0 +1,16 @@
+[package]
+name = "glint"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+bundled = ["duckdb/bundled"]
+
+[dependencies]
+duckdb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

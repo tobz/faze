@@ -1,0 +1,31 @@
+[alias]
+dev = "build"
+run-dev = "run -p glint-cli"
+test-all = "test --workspace"
+build-release = "build --release --features bundled"
+run-release = "run --release -p glint-cli --features bundled"
+build-deb = "deb -p glint-cli --features bundled"
+build-rpm = ["build --release --bin glint --features bundled", "generate-rpm -p glint-cli"]
+check-all = "check --workspace --all-targets --all-features"
+fmt-all = "fmt --all"
+clippy-all = "clippy --workspace --all-targets --all-features -- -D warnings"
+ci = ["fmt-all -- --check", "clippy-all", "test-all"]
+
+[build]
+incremental = true
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[target.x86_64-unknown-linux-musl]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold", "-C", "target-feature=+crt-static"]
