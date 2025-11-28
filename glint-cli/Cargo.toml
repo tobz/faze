@@ -14,23 +14,10 @@ categories = ["command-line-utilities", "development-tools"]
 name = "glint"
 path = "src/main.rs"
 
-[features]
-default = []
-bundled = ["glint/bundled"]
-
 [package.metadata.deb]
-maintainer = "Erick J3 <erick@example.com>"
-copyright = "2024, Erick J3 <erick@example.com>"
+maintainer = "Erick Jesus <erick.jesus2060@gmail.com>"
+copyright = "2025, Erick Jesus <erick.jesus2060@gmail.com>"
 license-file = ["../LICENSE", "0"]
-extended-description = """
-Glint is a lightweight OTLP collector with a modern UI.
-No Docker, no complex setup — just one binary.
-Features:
-- OTLP native (gRPC + HTTP)
-- Smart project-based database management
-- Beautiful terminal output
-- Fast queries with DuckDB
-"""
 depends = "$auto"
 section = "utils"
 priority = "optional"

@@ -21,21 +21,43 @@
           buildInputs = with pkgs; [
             rustToolchain
             cargo-watch
-            bun
+            cargo-bloat
             just
-            protobuf
-            sccache
             mold
             clang
-            duckdb
+            lld
+            protobuf
+            bun
+            sccache
           ];
 
           shellHook = ''
-            echo "Glint development shell"
-            echo "DuckDB version: $(duckdb --version)"
-            echo "Protoc version: $(protoc --version)"
-            export RUSTFLAGS="-C link-arg=-Wl,-rpath,${pkgs.duckdb}/lib"
+            echo "Glint Development Environment"
+            echo "Rust:    $(rustc --version)"
+            echo "Cargo:   $(cargo --version)"
+            echo "Protoc:  $(protoc --version)"
+            echo "Linker:  mold (fastest Rust linker)"
+            echo ""
+            echo "Quick commands:"
+            echo "  cargo build           - Fast dev build"
+            echo "  cargo build --release - Optimized release build"
+            echo "  cargo test            - Run tests"
+            echo ""
           '';
+        };
+        packages.default = pkgs.rustPlatform.buildRustPackage {
+          pname = "glint";
+          version = "0.1.0";
+          src = ./.;
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+          nativeBuildInputs = with pkgs; [
+            protobuf
+            mold
+            clang
+          ];
+          RUSTFLAGS = "-C link-arg=-fuse-ld=mold";
         };
       }
     );

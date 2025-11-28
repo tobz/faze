@@ -67,22 +67,10 @@ cargo run -p glint-cli -- info
 cargo run -p glint-cli -- clean
 ```
 
-### Project Structure
-
-```
-glint/
-├── glint/              # Core library (models, storage)
-├── glint-collector/    # OTLP receiver (gRPC/HTTP)
-├── glint-server/       # REST API (future)
-├── glint-cli/          # CLI binary
-├── glint-tui/          # Terminal UI (future)
-└── ui/                 # Web UI (future)
-```
-
 ### Running Tests
 
 ```bash
-# Run all tests (124 tests across the workspace)
+# Run all tests
 cargo test --workspace
 
 # Run specific package tests

@@ -13,6 +13,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/ErickJ3/glint"
+rust-version = "1.91"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -21,7 +22,7 @@ tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "fs"] }
 tonic = "0.14"
 prost = "0.14"
-duckdb = { version = "1.0", default-features = false }
+rusqlite = { version = "0.37.0", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 clap = { version = "4", features = ["derive"] }
@@ -36,18 +37,56 @@ glint = { path = "glint" }
 glint-collector = { path = "glint-collector" }
 glint-server = { path = "glint-server" }
 
-[profile.dev.package.libduckdb-sys]
-opt-level = 3
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
 
-[profile.dev.package."*"]
-opt-level = 0
+[workspace.lints.clippy]
+needless_pass_by_value = "warn"
+trivially_copy_pass_by_ref = "warn"
+large_types_passed_by_value = "warn"
+option_if_let_else = "warn"
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
 
 [profile.dev]
-incremental = true
+opt-level = 0
+debug = true
 split-debuginfo = "unpacked"
+incremental = true
+overflow-checks = true
+lto = false
+panic = "unwind"
+codegen-units = 256
+
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
 
 [profile.release]
 opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = true
+debug = false
+panic = "abort"
+overflow-checks = false
+incremental = false
+rpath = false
+
+[profile.dist]
+inherits = "release"
+lto = "fat"
+opt-level = "z"
+panic = "abort"
+strip = true
+codegen-units = 1
+
+[profile.bench]
+inherits = "release"
+debug = true
+strip = false
