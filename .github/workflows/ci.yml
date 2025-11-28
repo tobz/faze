@@ -13,7 +13,7 @@ env:
 jobs:
   quality:
     name: Fmt & Clippy
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       RUSTFLAGS: ""
       CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: "cc"
@@ -52,11 +52,7 @@ jobs:
   test:
     name: Test
     needs: quality
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -64,20 +60,10 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install protobuf (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install protobuf
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang
 
-      - name: Install protobuf (macOS)
-        if: matrix.os == 'macos-latest'
-        run: brew install protobuf
-
-      - name: Install protobuf (Windows)
-        if: matrix.os == 'windows-latest'
-        run: choco install protoc
-
       - name: Disable mold on Linux
-        if: matrix.os == 'ubuntu-latest'
         run: |
           echo "RUSTFLAGS=" >> $GITHUB_ENV
           echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=cc" >> $GITHUB_ENV
@@ -97,10 +83,7 @@ jobs:
   build:
     name: Build Release
     needs: test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -108,20 +91,10 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install protobuf (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install protobuf
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler clang
 
-      - name: Install protobuf (macOS)
-        if: matrix.os == 'macos-latest'
-        run: brew install protobuf
-
-      - name: Install protobuf (Windows)
-        if: matrix.os == 'windows-latest'
-        run: choco install protoc
-
       - name: Disable mold on Linux
-        if: matrix.os == 'ubuntu-latest'
         run: |
           echo "RUSTFLAGS=" >> $GITHUB_ENV
           echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=cc" >> $GITHUB_ENV
@@ -136,18 +109,10 @@ jobs:
           key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build release binary
-        run: cargo build --release --workspace --features bundled
+        run: cargo build --release --workspace
 
-      - name: Upload artifacts (Unix)
-        if: matrix.os != 'windows-latest'
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: glint-${{ matrix.os }}
+          name: glint-ubuntu-latest
           path: target/release/glint
-
-      - name: Upload artifacts (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: glint-${{ matrix.os }}
-          path: target/release/glint.exe
