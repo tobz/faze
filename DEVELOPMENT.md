@@ -73,49 +73,8 @@ just clean
 ## Building
 
 ```bash
-# Development build (uses system DuckDB library)
+# Development build
 cargo build
-
-# Release build with bundled DuckDB (portable, no system dependencies)
-cargo build --release --features bundled
-
-# Build specific package
-cargo build -p glint-cli --release --features bundled
-
-# Development build uses system DuckDB for faster compilation
-# Release build uses bundled DuckDB for portability
-```
-
-### DuckDB configuration
-
-Glint uses different DuckDB linking strategies for development and release:
-
-**Development (default):**
-- Uses system-installed DuckDB library
-- Much faster compilation (no need to build libduckdb-sys)
-- Requires DuckDB installed on your system
-- On NixOS: provided by `flake.nix`
-
-**Release (`--features bundled`):**
-- Bundles DuckDB statically
-- Fully portable binary (no system dependencies)
-- Longer compilation time
-- Required for distribution packages
-
-```bash
-# Install DuckDB system library
-# Ubuntu/Debian
-sudo apt-get install libduckdb-dev
-
-# macOS
-brew install duckdb
-
-# Arch Linux
-sudo pacman -S duckdb
-
-# NixOS
-nix develop  # Uses flake.nix
-```
 
 ## Running
 
@@ -136,9 +95,9 @@ just dev
 cargo test --workspace
 
 # Run specific package tests
-cargo test -p glint           # Core library tests (59 tests)
-cargo test -p glint-collector # Collector tests (47 tests)
-cargo test -p glint-server    # Server tests (18 tests)
+cargo test -p glint           
+cargo test -p glint-collector 
+cargo test -p glint-server 
 
 # Run with output
 cargo test --workspace -- --nocapture
@@ -302,7 +261,7 @@ async fn test_my_endpoint() {
 ```rust
 pub fn my_query(&self, params: MyParams) -> Result<Vec<MyType>> {
     let conn = self.conn.lock().unwrap();
-    // DuckDB query
+    // Sqlite query
 }
 ```
 
@@ -316,13 +275,6 @@ fn test_my_query() {
 ```
 
 ## Troubleshooting
-
-### DuckDB Locking Issues
-
-If you get "database is locked" errors:
-- Stop all running `glint serve` instances
-- The server holds a write lock on the database
-- Use `glint info` to check database location
 
 ### Protobuf Compilation Errors
 
@@ -395,6 +347,5 @@ For your reference, here are all the commands defined in the `justfile`:
 - [Rust Book](https://doc.rust-lang.org/book/)
 - [Cargo Book](https://doc.rust-lang.org/cargo/)
 - [OTLP Specification](https://opentelemetry.io/docs/specs/otlp/)
-- [DuckDB Documentation](https://duckdb.org/docs/)
 - [Axum Documentation](https://docs.rs/axum/)
 - [Just Documentation](https://just.systems/)

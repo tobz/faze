@@ -1,8 +1,9 @@
+mod convert;
 mod db_path;
 mod schema;
 
 use crate::models::{Log, Metric, Span, Trace};
-use duckdb::{Connection, Result as DuckDbResult};
+use rusqlite::{Connection, Result as SqliteResult, params};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
@@ -10,12 +11,14 @@ use thiserror::Error;
 pub use db_path::{
     detect_project_root, get_config_dir, get_data_dir, get_default_db_path, get_project_db_path,
 };
-pub use schema::init_schema;
+use schema::init_schema;
+
+use convert::{from_json, parse_severity_level, span_from_row, to_json};
 
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("Database error: {0}")]
-    Database(#[from] duckdb::Error),
+    Database(#[from] rusqlite::Error),
 
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
@@ -97,16 +100,16 @@ impl Storage {
     /// Insert a span
     pub fn insert_span(&self, span: &Span) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let attributes_json = serde_json::to_string(&span.attributes)?;
-        let status_json = serde_json::to_string(&span.status)?;
+        let attributes_json = to_json(&span.attributes)?;
+        let status_json = to_json(&span.status)?;
 
         conn.execute(
             "INSERT INTO spans (
                 span_id, trace_id, parent_span_id, name, kind,
                 start_time_unix_nano, end_time_unix_nano,
                 attributes, status, service_name
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            duckdb::params![
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
                 &span.span_id,
                 &span.trace_id,
                 &span.parent_span_id,
@@ -134,14 +137,14 @@ impl Storage {
     /// Insert a log
     pub fn insert_log(&self, log: &Log) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let attributes_json = serde_json::to_string(&log.attributes)?;
+        let attributes_json = to_json(&log.attributes)?;
 
         conn.execute(
             "INSERT INTO logs (
                 time_unix_nano, severity_level, severity_text, body,
                 attributes, trace_id, span_id, service_name
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            duckdb::params![
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
                 log.time_unix_nano,
                 format!("{:?}", log.severity_level),
                 &log.severity_text,
@@ -169,15 +172,15 @@ impl Storage {
         let conn = self.conn.lock().unwrap();
 
         for data_point in &metric.data_points {
-            let attributes_json = serde_json::to_string(&data_point.attributes)?;
+            let attributes_json = to_json(&data_point.attributes)?;
 
             conn.execute(
                 "INSERT INTO metrics (
                     name, description, unit, metric_type, temporality,
                     time_unix_nano, start_time_unix_nano, value,
                     attributes, service_name
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                duckdb::params![
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
                     &metric.name,
                     &metric.description,
                     &metric.unit,
@@ -225,56 +228,13 @@ impl Storage {
                     start_time_unix_nano, end_time_unix_nano,
                     attributes, status, service_name
              FROM spans
-             WHERE trace_id = ?
+             WHERE trace_id = ?1
              ORDER BY start_time_unix_nano",
         )?;
 
         let spans = stmt
-            .query_map([trace_id], |row| {
-                let attributes_json: String = row.get(7)?;
-                let status_json: String = row.get(8)?;
-
-                let attributes = serde_json::from_str(&attributes_json).map_err(|e| {
-                    duckdb::Error::FromSqlConversionFailure(
-                        7,
-                        duckdb::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
-
-                let status = serde_json::from_str(&status_json).map_err(|e| {
-                    duckdb::Error::FromSqlConversionFailure(
-                        8,
-                        duckdb::types::Type::Text,
-                        Box::new(e),
-                    )
-                })?;
-
-                let kind_str: String = row.get(4)?;
-                let kind = match kind_str.as_str() {
-                    "Unspecified" => crate::models::SpanKind::Unspecified,
-                    "Internal" => crate::models::SpanKind::Internal,
-                    "Server" => crate::models::SpanKind::Server,
-                    "Client" => crate::models::SpanKind::Client,
-                    "Producer" => crate::models::SpanKind::Producer,
-                    "Consumer" => crate::models::SpanKind::Consumer,
-                    _ => crate::models::SpanKind::Unspecified,
-                };
-
-                Ok(Span::new(
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    kind,
-                    row.get(5)?,
-                    row.get(6)?,
-                    attributes,
-                    status,
-                    row.get(9)?,
-                ))
-            })?
-            .collect::<DuckDbResult<Vec<_>>>()?;
+            .query_map([trace_id], span_from_row)?
+            .collect::<SqliteResult<Vec<_>>>()?;
 
         Ok(spans)
     }
@@ -287,29 +247,31 @@ impl Storage {
     ) -> Result<Vec<Trace>> {
         let conn = self.conn.lock().unwrap();
 
-        // get a unique ids
-        let query = if let Some(service) = service_name {
-            format!(
-                "SELECT DISTINCT trace_id FROM spans WHERE service_name = '{}' ORDER BY start_time_unix_nano DESC LIMIT {}",
-                service,
-                limit.unwrap_or(100)
+        let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(service) =
+            service_name
+        {
+            (
+                "SELECT DISTINCT trace_id FROM spans WHERE service_name = ?1 ORDER BY start_time_unix_nano DESC LIMIT ?2".to_string(),
+                vec![Box::new(service.to_string()), Box::new(limit.unwrap_or(100) as i64)],
             )
         } else {
-            format!(
-                "SELECT DISTINCT trace_id FROM spans ORDER BY start_time_unix_nano DESC LIMIT {}",
-                limit.unwrap_or(100)
+            (
+                "SELECT DISTINCT trace_id FROM spans ORDER BY start_time_unix_nano DESC LIMIT ?1"
+                    .to_string(),
+                vec![Box::new(limit.unwrap_or(100) as i64)],
             )
         };
 
         let mut stmt = conn.prepare(&query)?;
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
         let trace_ids: Vec<String> = stmt
-            .query_map([], |row| row.get(0))?
-            .collect::<DuckDbResult<Vec<_>>>()?;
+            .query_map(&params_refs[..], |row| row.get(0))?
+            .collect::<SqliteResult<Vec<_>>>()?;
 
         drop(stmt);
         drop(conn);
 
-        // full traces
         let mut traces = Vec::new();
         for trace_id in trace_ids {
             if let Ok(trace) = self.get_trace_by_id(&trace_id) {
@@ -324,50 +286,50 @@ impl Storage {
     pub fn list_logs(&self, service_name: Option<&str>, limit: Option<usize>) -> Result<Vec<Log>> {
         let conn = self.conn.lock().unwrap();
 
-        let query = if let Some(service) = service_name {
-            format!(
-                "SELECT time_unix_nano, severity_level, severity_text, body,
+        let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) =
+            if let Some(service) = service_name {
+                (
+                    "SELECT time_unix_nano, severity_level, severity_text, body,
                         attributes, trace_id, span_id, service_name
                  FROM logs
-                 WHERE service_name = '{}'
+                 WHERE service_name = ?1
                  ORDER BY time_unix_nano DESC
-                 LIMIT {}",
-                service,
-                limit.unwrap_or(100)
-            )
-        } else {
-            format!(
-                "SELECT time_unix_nano, severity_level, severity_text, body,
+                 LIMIT ?2"
+                        .to_string(),
+                    vec![
+                        Box::new(service.to_string()),
+                        Box::new(limit.unwrap_or(100) as i64),
+                    ],
+                )
+            } else {
+                (
+                    "SELECT time_unix_nano, severity_level, severity_text, body,
                         attributes, trace_id, span_id, service_name
                  FROM logs
                  ORDER BY time_unix_nano DESC
-                 LIMIT {}",
-                limit.unwrap_or(100)
-            )
-        };
+                 LIMIT ?1"
+                        .to_string(),
+                    vec![Box::new(limit.unwrap_or(100) as i64)],
+                )
+            };
 
         let mut stmt = conn.prepare(&query)?;
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
+
         let logs = stmt
-            .query_map([], |row| {
+            .query_map(&params_refs[..], |row| {
                 let attributes_json: String = row.get(4)?;
-                let attributes = serde_json::from_str(&attributes_json).map_err(|e| {
-                    duckdb::Error::FromSqlConversionFailure(
+                let attributes = from_json(&attributes_json).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
                         4,
-                        duckdb::types::Type::Text,
+                        rusqlite::types::Type::Text,
                         Box::new(e),
                     )
                 })?;
 
                 let severity_str: String = row.get(1)?;
-                let severity_level = match severity_str.as_str() {
-                    "Info" => crate::models::SeverityLevel::Info,
-                    "Warn" => crate::models::SeverityLevel::Warn,
-                    "Error" => crate::models::SeverityLevel::Error,
-                    "Debug" => crate::models::SeverityLevel::Debug,
-                    "Trace" => crate::models::SeverityLevel::Trace,
-                    "Fatal" => crate::models::SeverityLevel::Fatal,
-                    _ => crate::models::SeverityLevel::Unspecified,
-                };
+                let severity_level = parse_severity_level(&severity_str);
 
                 Ok(Log::new(
                     row.get(0)?,
@@ -380,7 +342,7 @@ impl Storage {
                     row.get(7)?,
                 ))
             })?
-            .collect::<DuckDbResult<Vec<_>>>()?;
+            .collect::<SqliteResult<Vec<_>>>()?;
 
         Ok(logs)
     }
