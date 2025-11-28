@@ -16,7 +16,6 @@ pub enum SpanKind {
     Consumer,
 }
 
-
 /// Span status code
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -27,7 +26,6 @@ pub enum StatusCode {
     Ok,
     Error,
 }
-
 
 /// Span status
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

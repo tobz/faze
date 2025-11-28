@@ -23,7 +23,6 @@ pub enum AggregationTemporality {
     Cumulative,
 }
 
-
 /// Represents a metric data point
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MetricDataPoint {

@@ -34,6 +34,7 @@
             echo "Glint development shell"
             echo "DuckDB version: $(duckdb --version)"
             echo "Protoc version: $(protoc --version)"
+            export RUSTFLAGS="-C link-arg=-Wl,-rpath,${pkgs.duckdb}/lib"
           '';
         };
       }

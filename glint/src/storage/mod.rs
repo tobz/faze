@@ -7,7 +7,9 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-pub use db_path::{detect_project_root, get_config_dir, get_data_dir, get_default_db_path, get_project_db_path};
+pub use db_path::{
+    detect_project_root, get_config_dir, get_data_dir, get_default_db_path, get_project_db_path,
+};
 pub use schema::init_schema;
 
 #[derive(Debug, Error)]
