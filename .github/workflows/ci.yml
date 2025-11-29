@@ -82,6 +82,7 @@ jobs:
 
   build_ui:
     name: Build UI Assets
+    needs: [test]
     runs-on: self-hosted
     steps:
       - name: Checkout code
