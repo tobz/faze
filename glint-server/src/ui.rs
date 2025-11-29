@@ -62,11 +62,10 @@ fn resolve_asset(path: &str) -> Option<(String, Cow<'static, [u8]>)> {
         return Some((requested, content.data));
     }
 
-    if !requested.contains('.') {
-        if let Some(content) = UiAssets::get("dist/index.html") {
+    if !requested.contains('.')
+        && let Some(content) = UiAssets::get("dist/index.html") {
             return Some(("index.html".to_owned(), content.data));
         }
-    }
 
     None
 }
