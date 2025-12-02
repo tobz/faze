@@ -1,5 +1,5 @@
 use crate::{
-    convert::convert_resource_spans,
+    convert::traces::convert_resource_spans,
     proto::opentelemetry::proto::collector::trace::v1::{
         ExportTracePartialSuccess, ExportTraceServiceRequest, ExportTraceServiceResponse,
         trace_service_server::{TraceService, TraceServiceServer},
@@ -11,11 +11,11 @@ use tonic::{Request, Response, Status};
 use tracing::error;
 
 /// OTLP collector that receives traces via gRPC
-pub struct OtlpCollector {
+pub struct OtlpSpansCollector {
     storage: Arc<Storage>,
 }
 
-impl OtlpCollector {
+impl OtlpSpansCollector {
     pub fn new(storage: Storage) -> Self {
         Self {
             storage: Arc::new(storage),
@@ -28,7 +28,7 @@ impl OtlpCollector {
 }
 
 #[tonic::async_trait]
-impl TraceService for OtlpCollector {
+impl TraceService for OtlpSpansCollector {
     async fn export(
         &self,
         request: Request<ExportTraceServiceRequest>,
@@ -106,7 +106,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_traces() {
         let storage = Storage::new_in_memory().unwrap();
-        let collector = OtlpCollector::new(storage.clone());
+        let collector = OtlpSpansCollector::new(storage.clone());
 
         let request = ExportTraceServiceRequest {
             resource_spans: vec![ResourceSpans {
@@ -147,7 +147,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_multiple_spans() {
         let storage = Storage::new_in_memory().unwrap();
-        let collector = OtlpCollector::new(storage.clone());
+        let collector = OtlpSpansCollector::new(storage.clone());
 
         let request = ExportTraceServiceRequest {
             resource_spans: vec![ResourceSpans {
@@ -195,7 +195,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_empty_request() {
         let storage = Storage::new_in_memory().unwrap();
-        let collector = OtlpCollector::new(storage.clone());
+        let collector = OtlpSpansCollector::new(storage.clone());
 
         let request = ExportTraceServiceRequest {
             resource_spans: vec![],
@@ -214,7 +214,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_multiple_resource_spans() {
         let storage = Storage::new_in_memory().unwrap();
-        let collector = OtlpCollector::new(storage.clone());
+        let collector = OtlpSpansCollector::new(storage.clone());
 
         let request = ExportTraceServiceRequest {
             resource_spans: vec![
@@ -276,7 +276,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_span_with_error_status() {
         let storage = Storage::new_in_memory().unwrap();
-        let collector = OtlpCollector::new(storage.clone());
+        let collector = OtlpSpansCollector::new(storage.clone());
 
         let mut span = create_test_otlp_span(
             &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
@@ -325,7 +325,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_span_with_all_kinds() {
         let storage = Storage::new_in_memory().unwrap();
-        let collector = OtlpCollector::new(storage.clone());
+        let collector = OtlpSpansCollector::new(storage.clone());
 
         let kinds = [
             OtlpSpanKind::Unspecified,
@@ -380,7 +380,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_span_with_parent() {
         let storage = Storage::new_in_memory().unwrap();
-        let collector = OtlpCollector::new(storage.clone());
+        let collector = OtlpSpansCollector::new(storage.clone());
 
         let parent_span = create_test_otlp_span(
             &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
@@ -439,7 +439,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_span_with_complex_attributes() {
         let storage = Storage::new_in_memory().unwrap();
-        let collector = OtlpCollector::new(storage.clone());
+        let collector = OtlpSpansCollector::new(storage.clone());
 
         let mut span = create_test_otlp_span(
             &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
@@ -519,7 +519,7 @@ mod tests {
     #[tokio::test]
     async fn test_export_traces_sequential() {
         let storage = Storage::new_in_memory().unwrap();
-        let collector = OtlpCollector::new(storage.clone());
+        let collector = OtlpSpansCollector::new(storage.clone());
 
         let request1 = ExportTraceServiceRequest {
             resource_spans: vec![ResourceSpans {

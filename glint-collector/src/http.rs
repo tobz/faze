@@ -1,5 +1,5 @@
 use crate::{
-    convert::convert_resource_spans,
+    convert::traces::convert_resource_spans,
     proto::opentelemetry::proto::collector::trace::v1::ExportTraceServiceRequest,
 };
 use axum::{

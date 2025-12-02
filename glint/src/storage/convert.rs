@@ -1,4 +1,6 @@
-use crate::models::{Attributes, SeverityLevel, Span, SpanKind, Status};
+use crate::models::{
+    AggregationTemporality, Attributes, MetricType, SeverityLevel, Span, SpanKind, Status,
+};
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +12,24 @@ pub fn from_json<'de, T: Deserialize<'de>>(json: &'de str) -> Result<T, serde_js
     serde_json::from_str(json)
 }
 
+pub fn parse_metric_type(type_str: &str) -> MetricType {
+    match type_str {
+        "Gauge" => MetricType::Gauge,
+        "Sum" => MetricType::Sum,
+        "Histogram" => MetricType::Histogram,
+        "Summary" => MetricType::Summary,
+        _ => MetricType::Gauge,
+    }
+}
+
+pub fn parse_temporality(temporality_str: &str) -> AggregationTemporality {
+    match temporality_str {
+        "Unspecified" => AggregationTemporality::Unspecified,
+        "Delta" => AggregationTemporality::Delta,
+        "Cumulative" => AggregationTemporality::Cumulative,
+        _ => AggregationTemporality::Unspecified,
+    }
+}
 pub fn parse_span_kind(kind_str: &str) -> SpanKind {
     match kind_str {
         "Unspecified" => SpanKind::Unspecified,

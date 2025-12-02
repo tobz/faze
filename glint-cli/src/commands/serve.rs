@@ -1,5 +1,5 @@
 use glint::{Storage, detect_project_root, get_project_db_path};
-use glint_collector::OtlpCollector;
+use glint_collector::grpc::{logs, metrics, traces};
 use std::path::PathBuf;
 use tracing::info;
 
@@ -24,15 +24,24 @@ pub async fn run(
     info!("Storage initialized");
 
     let storage_arc = Arc::new(storage.clone());
-    let collector = OtlpCollector::new(storage.clone());
-    let grpc_service = collector.into_service();
+
+    let spans_collector = traces::OtlpSpansCollector::new(storage.clone());
+    let spans_grpc_service = spans_collector.into_service();
+
+    let logs_collector = logs::OtlpLogsCollector::new(storage.clone());
+    let logs_grpc_service = logs_collector.into_service();
+
+    let metrics_collector = metrics::OtlpMetricsCollector::new(storage.clone());
+    let metrics_grpc_service = metrics_collector.into_service();
+
     let grpc_addr = format!("0.0.0.0:{}", grpc_port).parse()?;
+    let grpc_server = tonic::transport::Server::builder()
+        .add_service(spans_grpc_service)
+        .add_service(logs_grpc_service)
+        .add_service(metrics_grpc_service)
+        .serve(grpc_addr);
 
     info!("Starting OTLP gRPC collector on {}", grpc_addr);
-
-    let grpc_server = tonic::transport::Server::builder()
-        .add_service(grpc_service)
-        .serve(grpc_addr);
 
     let http_collector_router = glint_collector::create_router(storage_arc);
     let http_collector_addr = "0.0.0.0:4318";
