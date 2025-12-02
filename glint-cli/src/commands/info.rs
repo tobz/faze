@@ -32,7 +32,7 @@ fn get_size_status(mb: f64) -> (String, &'static str) {
 
 fn shorten_path(path: &std::path::Path) -> String {
     let path_str = path.display().to_string();
-    if let Some(home) = std::env::var("HOME").ok() {
+    if let Ok(home) = std::env::var("HOME") {
         path_str.replace(&home, "~")
     } else {
         path_str
