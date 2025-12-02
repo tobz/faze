@@ -24,6 +24,9 @@ pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
             if let Ok(log_count) = storage.count_logs() {
                 println!("Total logs:       {}", log_count);
             }
+            if let Ok(metric_count) = storage.count_metrics() {
+                println!("Total metrics:    {}", metric_count);
+            }
         }
     } else {
         println!("Database not yet created");

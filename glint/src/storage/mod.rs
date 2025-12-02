@@ -2,18 +2,21 @@ mod convert;
 mod db_path;
 mod schema;
 
-use crate::models::{Log, Metric, Span, Trace};
+use crate::models::{
+    AggregationTemporality, Attributes, Log, Metric, MetricDataPoint, MetricType, Span, Trace,
+};
 use rusqlite::{Connection, Result as SqliteResult, params};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
+use convert::{
+    from_json, parse_metric_type, parse_severity_level, parse_temporality, span_from_row, to_json,
+};
 pub use db_path::{
     detect_project_root, get_config_dir, get_data_dir, get_default_db_path, get_project_db_path,
 };
 use schema::init_schema;
-
-use convert::{from_json, parse_severity_level, span_from_row, to_json};
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -37,6 +40,7 @@ pub type Result<T> = std::result::Result<T, StorageError>;
 /// By default, Glint stores data in a file-based database (`glint.db`) to prevent
 /// excessive memory usage for large projects. You can:
 /// - Use the default database: `Storage::new()`
+/// - For testing and debug, use: `Storage::new_in_memory()`
 /// - Specify a custom path: `Storage::new_with_path("custom.db")`
 /// - Delete the database: `Storage::delete_database("glint.db")`
 #[derive(Clone)]
@@ -49,7 +53,7 @@ impl Storage {
     ///
     /// This will:
     /// 1. Detect the current project by looking for markers (.git, Cargo.toml, package.json, etc.)
-    /// 2. Create a database in ~/.config/glint/<project_name>.db
+    /// 2. Create a database in ~/.local/share/glint/<project_name>.db
     /// 3. Multiple terminals in the same project will share the same database
     pub fn new() -> Result<Self> {
         let db_path = get_project_db_path().map_err(|e| {
@@ -345,6 +349,96 @@ impl Storage {
             .collect::<SqliteResult<Vec<_>>>()?;
 
         Ok(logs)
+    }
+
+    pub fn list_metrics(
+        &self,
+        service_name: Option<&str>,
+        limit: Option<usize>,
+    ) -> Result<Vec<Metric>> {
+        let conn = self
+            .conn
+            .lock()
+            .map_err(|e| StorageError::InvalidInput(format!("Mutex poisoned: {}", e)))?;
+        let limit_value = limit.unwrap_or(100) as i64;
+
+        let (query, params_vec): (String, Vec<Box<dyn rusqlite::ToSql>>) =
+            if let Some(service) = service_name {
+                (
+                    "SELECT name, description, unit, metric_type, temporality,
+                            time_unix_nano, start_time_unix_nano, value,
+                            attributes, service_name
+                       FROM metrics
+                       WHERE service_name = ?1
+                       ORDER BY time_unix_nano DESC
+                       LIMIT ?2"
+                        .to_string(),
+                    vec![Box::new(service.to_string()), Box::new(limit_value)],
+                )
+            } else {
+                (
+                    "SELECT name, description, unit, metric_type, temporality,
+                            time_unix_nano, start_time_unix_nano, value,
+                            attributes, service_name
+                       FROM metrics
+                       ORDER BY time_unix_nano DESC
+                       LIMIT ?1"
+                        .to_string(),
+                    vec![Box::new(limit_value)],
+                )
+            };
+
+        let mut stmt = conn.prepare(&query)?;
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
+
+        let metrics = stmt
+            .query_map(&params_refs[..], |row| {
+                let attributes_json: String = row.get(8)?;
+
+                let raw_json: serde_json::Value =
+                    serde_json::from_str(&attributes_json).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            8,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?;
+
+                let mut attributes = Attributes::default();
+                if let serde_json::Value::Object(map) = raw_json {
+                    for (k, v) in map {
+                        attributes.insert(k, v.to_string());
+                    }
+                }
+
+                let metric_type_str: String = row.get(3)?;
+                let metric_type: MetricType = parse_metric_type(&metric_type_str);
+
+                let temporality_str: String = row.get(4)?;
+                let temporality: AggregationTemporality = parse_temporality(&temporality_str);
+
+                let data_point = MetricDataPoint {
+                    time_unix_nano: row.get(5)?,
+                    start_time_unix_nano: row.get(6)?,
+                    value: row.get(7)?,
+                    attributes,
+                };
+
+                Ok(Metric {
+                    name: row.get(0)?,
+                    description: row.get(1)?,
+                    unit: row.get(2)?,
+                    metric_type,
+                    temporality,
+                    data_points: vec![data_point],
+                    service_name: row.get(9)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<Metric>>>()
+            .map_err(StorageError::from)?;
+
+        Ok(metrics)
     }
 
     /// Get count of spans

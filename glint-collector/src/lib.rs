@@ -11,10 +11,30 @@ pub mod proto {
                         tonic::include_proto!("opentelemetry.proto.collector.trace.v1");
                     }
                 }
+                pub mod logs {
+                    pub mod v1 {
+                        tonic::include_proto!("opentelemetry.proto.collector.logs.v1");
+                    }
+                }
+                pub mod metrics {
+                    pub mod v1 {
+                        tonic::include_proto!("opentelemetry.proto.collector.metrics.v1");
+                    }
+                }
             }
             pub mod trace {
                 pub mod v1 {
                     tonic::include_proto!("opentelemetry.proto.trace.v1");
+                }
+            }
+            pub mod logs {
+                pub mod v1 {
+                    tonic::include_proto!("opentelemetry.proto.logs.v1");
+                }
+            }
+            pub mod metrics {
+                pub mod v1 {
+                    tonic::include_proto!("opentelemetry.proto.metrics.v1");
                 }
             }
             pub mod resource {
@@ -31,5 +51,5 @@ pub mod proto {
     }
 }
 
-pub use grpc::OtlpCollector;
+pub use grpc::{logs, metrics, traces};
 pub use http::create_router;

@@ -1,5 +1,7 @@
 use crate::{
-    routes::{AppState, get_trace, health_check, list_logs, list_services, list_traces},
+    routes::{
+        AppState, get_trace, health_check, list_logs, list_metrics, list_services, list_traces,
+    },
     ui,
 };
 use axum::{Router, routing::get};
@@ -31,16 +33,12 @@ impl ApiServer {
         };
 
         Router::new()
-            // Health check
             .route("/health", get(health_check))
-            // Trace routes
             .route("/api/traces", get(list_traces))
             .route("/api/traces/{id}", get(get_trace))
-            // Log routes
             .route("/api/logs", get(list_logs))
-            // Service routes
             .route("/api/services", get(list_services))
-            // Enable CORS for browser access
+            .route("/api/metrics", get(list_metrics))
             .layer(CorsLayer::permissive())
             .with_state(state)
             .fallback(ui::fallback_service())
@@ -59,6 +57,10 @@ impl ApiServer {
             self.port
         );
         info!("  List logs:     http://localhost:{}/api/logs", self.port);
+        info!(
+            "  List metrics:  http://localhost:{}/api/metrics",
+            self.port
+        );
         info!(
             "  List services: http://localhost:{}/api/services",
             self.port

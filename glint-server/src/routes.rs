@@ -59,6 +59,12 @@ pub struct TraceInfo {
     pub start_time: Option<i64>,
 }
 
+#[derive(Deserialize)]
+pub struct ListParams {
+    service: Option<String>,
+    limit: Option<usize>,
+}
+
 impl From<&glint::Trace> for TraceInfo {
     fn from(trace: &glint::Trace) -> Self {
         Self {
@@ -221,6 +227,21 @@ pub async fn list_services(State(state): State<AppState>) -> impl IntoResponse {
                 .into_response()
         }
     }
+}
+
+/// GET /api/metrics - List metrics
+pub async fn list_metrics(
+    State(state): State<AppState>,
+    Query(params): Query<ListParams>,
+) -> impl IntoResponse {
+    let metrics = state
+        .storage
+        .list_metrics(params.service.as_deref(), params.limit)
+        .unwrap_or_default();
+
+    Json(serde_json::json!({
+        "metrics": metrics
+    }))
 }
 
 /// GET /health - Health check endpoint

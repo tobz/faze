@@ -1,49 +1,8 @@
-use crate::proto::opentelemetry::proto::{
-    common::v1::{AnyValue, KeyValue, any_value},
-    resource::v1::Resource,
-    trace::v1::{
-        ResourceSpans, Span, SpanKind as OtlpSpanKind, Status, StatusCode as OtlpStatusCode,
-    },
+use crate::convert::{bytes_to_hex, convert_attributes, convert_resource};
+use crate::proto::opentelemetry::proto::trace::v1::{
+    ResourceSpans, Span, SpanKind as OtlpSpanKind, Status, StatusCode as OtlpSpanStatusCode,
 };
-use glint::models::{
-    AttributeValue, Attributes, Resource as GlintResource, Span as GlintSpan, SpanKind,
-    Status as GlintStatus, StatusCode,
-};
-
-/// Convert OTLP AnyValue to internal AttributeValue
-fn convert_any_value(value: &AnyValue) -> Option<AttributeValue> {
-    value.value.as_ref().and_then(|v| match v {
-        any_value::Value::StringValue(s) => Some(AttributeValue::String(s.clone())),
-        any_value::Value::BoolValue(b) => Some(AttributeValue::Bool(*b)),
-        any_value::Value::IntValue(i) => Some(AttributeValue::Int(*i)),
-        any_value::Value::DoubleValue(d) => Some(AttributeValue::Double(*d)),
-        any_value::Value::BytesValue(b) => Some(AttributeValue::Bytes(b.clone())),
-        any_value::Value::ArrayValue(arr) => {
-            let values: Vec<AttributeValue> =
-                arr.values.iter().filter_map(convert_any_value).collect();
-            Some(AttributeValue::Array(values))
-        }
-        any_value::Value::KvlistValue(_) => None, // Not supported for now
-    })
-}
-
-/// Convert OTLP KeyValue list to Attributes
-fn convert_attributes(kvs: &[KeyValue]) -> Attributes {
-    kvs.iter()
-        .filter_map(|kv| {
-            kv.value
-                .as_ref()
-                .and_then(convert_any_value)
-                .map(|v| (kv.key.clone(), v))
-        })
-        .collect()
-}
-
-/// Convert OTLP Resource to internal Resource
-fn convert_resource(resource: &Resource) -> GlintResource {
-    let attributes = convert_attributes(&resource.attributes);
-    GlintResource::new(attributes)
-}
+use glint::models::{Span as GlintSpan, SpanKind, Status as GlintStatus, StatusCode};
 
 /// Convert OTLP SpanKind to internal SpanKind
 fn convert_span_kind(kind: i32) -> SpanKind {
@@ -56,29 +15,6 @@ fn convert_span_kind(kind: i32) -> SpanKind {
         Ok(OtlpSpanKind::Consumer) => SpanKind::Consumer,
         Err(_) => SpanKind::Unspecified,
     }
-}
-
-/// Convert OTLP Status to internal Status
-fn convert_status(status: &Status) -> GlintStatus {
-    let code = match OtlpStatusCode::try_from(status.code) {
-        Ok(OtlpStatusCode::Unset) => StatusCode::Unset,
-        Ok(OtlpStatusCode::Ok) => StatusCode::Ok,
-        Ok(OtlpStatusCode::Error) => StatusCode::Error,
-        Err(_) => StatusCode::Unset,
-    };
-
-    let message = if status.message.is_empty() {
-        None
-    } else {
-        Some(status.message.clone())
-    };
-
-    GlintStatus { code, message }
-}
-
-/// Convert bytes to hex string
-fn bytes_to_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 /// Convert OTLP Span to internal Span
@@ -130,11 +66,32 @@ pub fn convert_resource_spans(resource_spans: &[ResourceSpans]) -> Vec<GlintSpan
     spans
 }
 
+/// Convert OTLP Status to internal Status
+fn convert_status(status: &Status) -> GlintStatus {
+    let code = match OtlpSpanStatusCode::try_from(status.code) {
+        Ok(OtlpSpanStatusCode::Unset) => StatusCode::Unset,
+        Ok(OtlpSpanStatusCode::Ok) => StatusCode::Ok,
+        Ok(OtlpSpanStatusCode::Error) => StatusCode::Error,
+        Err(_) => StatusCode::Unset,
+    };
+
+    let message = if status.message.is_empty() {
+        None
+    } else {
+        Some(status.message.clone())
+    };
+
+    GlintStatus { code, message }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::proto::opentelemetry::proto::trace::v1::ScopeSpans;
-    use std;
+    use crate::proto::opentelemetry::proto::{
+        common::v1::{AnyValue, KeyValue, any_value},
+        resource::v1::Resource,
+        trace::v1::ScopeSpans,
+    };
 
     #[test]
     fn test_convert_span_kind() {
@@ -153,64 +110,9 @@ mod tests {
     }
 
     #[test]
-    fn test_bytes_to_hex() {
-        assert_eq!(bytes_to_hex(&[0x12, 0x34, 0xab, 0xcd]), "1234abcd");
-        assert_eq!(bytes_to_hex(&[]), "");
-    }
-
-    #[test]
-    fn test_convert_any_value_string() {
-        let value = AnyValue {
-            value: Some(any_value::Value::StringValue("test".to_string())),
-        };
-        let result = convert_any_value(&value).unwrap();
-        assert_eq!(result, AttributeValue::String("test".to_string()));
-    }
-
-    #[test]
-    fn test_convert_any_value_int() {
-        let value = AnyValue {
-            value: Some(any_value::Value::IntValue(42)),
-        };
-        let result = convert_any_value(&value).unwrap();
-        assert_eq!(result, AttributeValue::Int(42));
-    }
-
-    #[test]
-    fn test_convert_any_value_bool() {
-        let value = AnyValue {
-            value: Some(any_value::Value::BoolValue(true)),
-        };
-        let result = convert_any_value(&value).unwrap();
-        assert_eq!(result, AttributeValue::Bool(true));
-    }
-
-    #[test]
-    fn test_convert_attributes() {
-        let kvs = vec![
-            KeyValue {
-                key: "name".to_string(),
-                value: Some(AnyValue {
-                    value: Some(any_value::Value::StringValue("test".to_string())),
-                }),
-            },
-            KeyValue {
-                key: "count".to_string(),
-                value: Some(AnyValue {
-                    value: Some(any_value::Value::IntValue(10)),
-                }),
-            },
-        ];
-
-        let attrs = convert_attributes(&kvs);
-        assert_eq!(attrs.get_string("name"), Some("test"));
-        assert_eq!(attrs.get_int("count"), Some(10));
-    }
-
-    #[test]
     fn test_convert_status() {
         let status = Status {
-            code: OtlpStatusCode::Ok as i32,
+            code: OtlpSpanStatusCode::Ok as i32,
             message: "".to_string(),
         };
         let result = convert_status(&status);
@@ -218,162 +120,12 @@ mod tests {
         assert_eq!(result.message, None);
 
         let error_status = Status {
-            code: OtlpStatusCode::Error as i32,
+            code: OtlpSpanStatusCode::Error as i32,
             message: "error occurred".to_string(),
         };
         let result = convert_status(&error_status);
         assert_eq!(result.code, StatusCode::Error);
         assert_eq!(result.message, Some("error occurred".to_string()));
-    }
-
-    #[test]
-    fn test_convert_resource() {
-        let resource = Resource {
-            attributes: vec![KeyValue {
-                key: "service.name".to_string(),
-                value: Some(AnyValue {
-                    value: Some(any_value::Value::StringValue("my-service".to_string())),
-                }),
-            }],
-            dropped_attributes_count: 0,
-        };
-
-        let result = convert_resource(&resource);
-        assert_eq!(result.service_name(), Some("my-service"));
-    }
-
-    #[test]
-    fn test_convert_any_value_double() {
-        let value = AnyValue {
-            value: Some(any_value::Value::DoubleValue(std::f64::consts::PI)),
-        };
-        let result = convert_any_value(&value).unwrap();
-        assert_eq!(result, AttributeValue::Double(std::f64::consts::PI));
-    }
-
-    #[test]
-    fn test_convert_any_value_bytes() {
-        let bytes = vec![0x01, 0x02, 0x03];
-        let value = AnyValue {
-            value: Some(any_value::Value::BytesValue(bytes.clone())),
-        };
-        let result = convert_any_value(&value).unwrap();
-        assert_eq!(result, AttributeValue::Bytes(bytes));
-    }
-
-    #[test]
-    fn test_convert_any_value_array() {
-        let value = AnyValue {
-            value: Some(any_value::Value::ArrayValue(
-                crate::proto::opentelemetry::proto::common::v1::ArrayValue {
-                    values: vec![
-                        AnyValue {
-                            value: Some(any_value::Value::StringValue("item1".to_string())),
-                        },
-                        AnyValue {
-                            value: Some(any_value::Value::IntValue(42)),
-                        },
-                    ],
-                },
-            )),
-        };
-        let result = convert_any_value(&value).unwrap();
-        if let AttributeValue::Array(arr) = result {
-            assert_eq!(arr.len(), 2);
-            assert_eq!(arr[0], AttributeValue::String("item1".to_string()));
-            assert_eq!(arr[1], AttributeValue::Int(42));
-        } else {
-            panic!("Expected array value");
-        }
-    }
-
-    #[test]
-    fn test_convert_any_value_empty_array() {
-        let value = AnyValue {
-            value: Some(any_value::Value::ArrayValue(
-                crate::proto::opentelemetry::proto::common::v1::ArrayValue { values: vec![] },
-            )),
-        };
-        let result = convert_any_value(&value).unwrap();
-        if let AttributeValue::Array(arr) = result {
-            assert_eq!(arr.len(), 0);
-        } else {
-            panic!("Expected array value");
-        }
-    }
-
-    #[test]
-    fn test_convert_any_value_none() {
-        let value = AnyValue { value: None };
-        let result = convert_any_value(&value);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_convert_attributes_empty() {
-        let kvs: Vec<KeyValue> = vec![];
-        let attrs = convert_attributes(&kvs);
-        assert!(attrs.is_empty());
-    }
-
-    #[test]
-    fn test_convert_attributes_mixed_types() {
-        let kvs = vec![
-            KeyValue {
-                key: "string_key".to_string(),
-                value: Some(AnyValue {
-                    value: Some(any_value::Value::StringValue("value".to_string())),
-                }),
-            },
-            KeyValue {
-                key: "int_key".to_string(),
-                value: Some(AnyValue {
-                    value: Some(any_value::Value::IntValue(123)),
-                }),
-            },
-            KeyValue {
-                key: "bool_key".to_string(),
-                value: Some(AnyValue {
-                    value: Some(any_value::Value::BoolValue(false)),
-                }),
-            },
-            KeyValue {
-                key: "double_key".to_string(),
-                value: Some(AnyValue {
-                    value: Some(any_value::Value::DoubleValue(std::f64::consts::E)),
-                }),
-            },
-        ];
-
-        let attrs = convert_attributes(&kvs);
-        assert_eq!(attrs.get_string("string_key"), Some("value"));
-        assert_eq!(attrs.get_int("int_key"), Some(123));
-        assert_eq!(attrs.get_bool("bool_key"), Some(false));
-        assert_eq!(attrs.get_double("double_key"), Some(std::f64::consts::E));
-    }
-
-    #[test]
-    fn test_convert_attributes_with_none_values() {
-        let kvs = vec![
-            KeyValue {
-                key: "valid".to_string(),
-                value: Some(AnyValue {
-                    value: Some(any_value::Value::StringValue("test".to_string())),
-                }),
-            },
-            KeyValue {
-                key: "none_value".to_string(),
-                value: None,
-            },
-            KeyValue {
-                key: "empty_value".to_string(),
-                value: Some(AnyValue { value: None }),
-            },
-        ];
-
-        let attrs = convert_attributes(&kvs);
-        assert_eq!(attrs.len(), 1);
-        assert_eq!(attrs.get_string("valid"), Some("test"));
     }
 
     #[test]
@@ -413,21 +165,21 @@ mod tests {
     #[test]
     fn test_convert_status_all_codes() {
         let unset = Status {
-            code: OtlpStatusCode::Unset as i32,
+            code: OtlpSpanStatusCode::Unset as i32,
             message: String::new(),
         };
         let result = convert_status(&unset);
         assert_eq!(result.code, StatusCode::Unset);
 
         let ok = Status {
-            code: OtlpStatusCode::Ok as i32,
+            code: OtlpSpanStatusCode::Ok as i32,
             message: String::new(),
         };
         let result = convert_status(&ok);
         assert_eq!(result.code, StatusCode::Ok);
 
         let error = Status {
-            code: OtlpStatusCode::Error as i32,
+            code: OtlpSpanStatusCode::Error as i32,
             message: "error".to_string(),
         };
         let result = convert_status(&error);
@@ -448,30 +200,11 @@ mod tests {
     #[test]
     fn test_convert_status_empty_message() {
         let status = Status {
-            code: OtlpStatusCode::Error as i32,
+            code: OtlpSpanStatusCode::Error as i32,
             message: String::new(),
         };
         let result = convert_status(&status);
         assert_eq!(result.message, None);
-    }
-
-    #[test]
-    fn test_bytes_to_hex_empty() {
-        assert_eq!(bytes_to_hex(&[]), "");
-    }
-
-    #[test]
-    fn test_bytes_to_hex_single_byte() {
-        assert_eq!(bytes_to_hex(&[0xFF]), "ff");
-    }
-
-    #[test]
-    fn test_bytes_to_hex_standard_trace_id() {
-        let trace_id = vec![
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
-            0x0e, 0x0f,
-        ];
-        assert_eq!(bytes_to_hex(&trace_id), "000102030405060708090a0b0c0d0e0f");
     }
 
     #[test]
@@ -491,7 +224,7 @@ mod tests {
             links: vec![],
             dropped_links_count: 0,
             status: Some(Status {
-                code: OtlpStatusCode::Ok as i32,
+                code: OtlpSpanStatusCode::Ok as i32,
                 message: String::new(),
             }),
             trace_state: String::new(),
@@ -557,7 +290,7 @@ mod tests {
             links: vec![],
             dropped_links_count: 0,
             status: Some(Status {
-                code: OtlpStatusCode::Ok as i32,
+                code: OtlpSpanStatusCode::Ok as i32,
                 message: String::new(),
             }),
             trace_state: String::new(),
