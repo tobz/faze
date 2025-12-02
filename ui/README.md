@@ -1,73 +1,123 @@
-# React + TypeScript + Vite
+```bash
+src/
+  routes/
+    __root.tsx
+    _layout.tsx
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+    dashboard/
+      index.tsx
 
-Currently, two official plugins are available:
+    services/
+      _layout.tsx
+      index.tsx
+      $serviceId/
+        _layout.tsx
+        index.tsx
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+        traces/
+          index.tsx
+          $traceId.tsx
 
-## React Compiler
+        logs/
+          index.tsx
+          $logId.tsx
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+        metrics/
+          index.tsx
+          explore.tsx
 
-## Expanding the ESLint configuration
+    settings/
+      index.tsx
+      appearance.tsx
+      storage.tsx
+      advanced.tsx
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+  features/
+    services/
+      api/
+        getServices.ts
+        getServiceDetails.ts
+      components/
+        ServiceList.tsx
+        ServiceSelector.tsx
+        ServiceHeader.tsx
+      hooks/
+        useServices.ts
+        useService.ts
+      utils/
+        serviceFormatters.ts
+      types/
+        service.ts
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+    traces/
+      api/
+        getTraces.ts
+        getTraceById.ts
+      components/
+        TraceList.tsx
+        TraceTimeline.tsx
+        TraceDetailSidebar.tsx
+      hooks/
+        useTraces.ts
+        useTrace.ts
+      utils/
+        traceFormatters.ts
+      types/
+        trace.ts
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+    logs/
+      api/
+        getLogs.ts
+        getLogById.ts
+      components/
+        LogTable.tsx
+        LogDetail.tsx
+      hooks/
+        useLogs.ts
+      utils/
+        logFilters.ts
+      types/
+        log.ts
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+    metrics/
+      api/
+        getMetrics.ts
+      components/
+        MetricChart.tsx
+        MetricExplorer.tsx
+      hooks/
+        useMetrics.ts
+      utils/
+        metricQueries.ts
+      types/
+        metric.ts
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+  components/
+    ui/
+      Button.tsx
+      Card.tsx
+      Table.tsx
+      Sidebar.tsx
+      Topbar.tsx
+      Skeleton.tsx
+      Dialog.tsx
+
+    layout/
+      AppShell.tsx
+      MainSidebar.tsx
+      ServiceSidebar.tsx
+
+
+  lib/
+    glintClient.ts          // cliente HTTP/gRPC para o binário local
+    storage.ts              // helpers para acesso ao DB local
+    queryClient.ts          // TanStack Query config
+
+  types/
+    common.ts
+
+  styles/
+    globals.css
 ```
