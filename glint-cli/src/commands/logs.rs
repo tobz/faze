@@ -1,3 +1,4 @@
+use colored::*;
 use glint::Storage;
 use std::path::PathBuf;
 
@@ -13,11 +14,26 @@ pub async fn run(
 
     let logs = storage.list_logs(service.as_deref(), Some(100))?;
 
+    if logs.is_empty() {
+        println!("{}", "No logs found".yellow());
+        return Ok(());
+    }
+
     for log in logs {
+        let severity = log.severity_level.as_str();
+        let colored_severity = match severity {
+            "ERROR" | "FATAL" => severity.red().bold(),
+            "WARN" => severity.yellow(),
+            "INFO" => severity.cyan(),
+            "DEBUG" => severity.dimmed(),
+            _ => severity.normal(),
+        };
+        let service = log.service_name.as_deref().unwrap_or("unknown");
+
         println!(
             "[{}] {} - {}",
-            log.severity_level.as_str(),
-            log.service_name.as_deref().unwrap_or("unknown"),
+            colored_severity,
+            service.bright_white(),
             log.body
         );
     }

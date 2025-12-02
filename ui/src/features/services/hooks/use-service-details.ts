@@ -56,7 +56,7 @@ export function useServiceDetails(serviceName: string) {
     const errorLogs = logs.filter(
       (l) =>
         l.severity_level &&
-        (l.severity_level === "ERROR" || l.severity_level === "FATAL"),
+        (l.severity_level === "Error" || l.severity_level === "Fatal"),
     ).length;
 
     const totalMetrics = metrics.length;

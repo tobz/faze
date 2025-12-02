@@ -8,8 +8,11 @@ use cli::Cli;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use tracing_subscriber::EnvFilter;
 
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("error"));
+
     tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
+        .with_env_filter(filter)
+        .with_target(false)
         .init();
 
     let cli = Cli::parse();

@@ -36,7 +36,7 @@ export function ServiceLogs({ logs, serviceName }: ServiceLogsProps) {
       <div className="divide-y divide-border">
         {logs.map((log, index) => (
           <div
-            key={`${log.timestamp}-${index}`}
+            key={`${log.time_unix_nano}-${index}`}
             className="p-4 hover:bg-card/50 transition-colors"
           >
             <div className="flex items-start justify-between gap-4">
@@ -50,7 +50,7 @@ export function ServiceLogs({ logs, serviceName }: ServiceLogsProps) {
                     </span>
                   )}
                   <span className="text-xs text-foreground/50">
-                    {formatRelativeTime(log.timestamp)}
+                    {formatRelativeTime(log.time_unix_nano)}
                   </span>
                 </div>
                 <div className="text-sm font-mono truncate">{log.body}</div>
