@@ -1,10 +1,12 @@
+use colored::*;
 use glint::{Storage, get_data_dir, get_project_db_path};
 use std::path::PathBuf;
 
 pub async fn run(db_path: Option<PathBuf>, all: bool) -> Result<(), Box<dyn std::error::Error>> {
     if all {
         let data_dir = get_data_dir()?;
-        println!("Cleaning all databases in: {}", data_dir.display());
+        println!("\n{}", "Cleaning All Databases".yellow().bold());
+        println!("  Location: {}", data_dir.display().to_string().dimmed());
 
         let entries = std::fs::read_dir(&data_dir)?;
         let mut count = 0;
@@ -14,26 +16,43 @@ pub async fn run(db_path: Option<PathBuf>, all: bool) -> Result<(), Box<dyn std:
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) == Some("db") {
                 if let Err(e) = std::fs::remove_file(&path) {
-                    eprintln!("Failed to delete {}: {}", path.display(), e);
+                    println!(
+                        "  {} {}: {}",
+                        "✗".red(),
+                        path.file_name().unwrap().to_string_lossy(),
+                        e.to_string().dimmed()
+                    );
                 } else {
-                    println!("Deleted: {}", path.file_name().unwrap().to_string_lossy());
+                    println!(
+                        "  {} {}",
+                        "✓".green(),
+                        path.file_name().unwrap().to_string_lossy().bright_white()
+                    );
                     count += 1;
                 }
             }
         }
 
-        println!("Cleaned {} database(s)", count);
+        println!(
+            "\n{} {}",
+            "Cleaned".green().bold(),
+            format!("{} database(s)", count).cyan()
+        );
     } else {
         let final_path = db_path.unwrap_or_else(|| get_project_db_path().unwrap());
-        println!("Deleting database: {}", final_path.display());
+        println!("\n{}", "Deleting Database".yellow().bold());
+        println!("  Path: {}", final_path.display().to_string().dimmed());
 
         match Storage::delete_database(&final_path) {
-            Ok(()) => println!("Database deleted successfully"),
+            Ok(()) => println!("\n{}", "Database deleted".green().bold()),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                println!("Database not found (already deleted or never created)")
+                println!(
+                    "\n{}",
+                    "Database not found (already deleted or never created)".yellow()
+                )
             }
             Err(e) => {
-                eprintln!("❌ Failed to delete database: {}", e);
+                println!("\n{} {}", "Failed to delete database:".red().bold(), e);
                 std::process::exit(1);
             }
         }

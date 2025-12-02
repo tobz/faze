@@ -1,7 +1,7 @@
+use colored::*;
 use glint::{Storage, detect_project_root, get_project_db_path};
 use glint_collector::grpc::{logs, metrics, traces};
 use std::path::PathBuf;
-use tracing::info;
 
 pub async fn run(
     port: u16,
@@ -10,18 +10,24 @@ pub async fn run(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use std::sync::Arc;
 
-    let storage = if let Some(path) = db_path {
-        info!("Using custom database at: {}", path.display());
-        Storage::new_with_path(&path)?
+    let (storage, project_root, db_path_display) = if let Some(path) = db_path {
+        let storage = Storage::new_with_path(&path)?;
+        let project_root = detect_project_root();
+        (storage, project_root, path.display().to_string())
     } else {
         let detected_path = get_project_db_path()?;
         let project_root = detect_project_root();
-        info!("Project detected: {}", project_root.display());
-        info!("Database: {}", detected_path.display());
-        Storage::new()?
+        let storage = Storage::new()?;
+        (storage, project_root, detected_path.display().to_string())
     };
 
-    info!("Storage initialized");
+    println!("\n{}", "Starting Glint".bright_cyan().bold());
+    println!(
+        "  Project:  {}",
+        project_root.display().to_string().bright_white()
+    );
+    println!("  Database: {}", db_path_display.dimmed());
+    println!("  Storage:  {}", "ready".green());
 
     let storage_arc = Arc::new(storage.clone());
 
@@ -41,12 +47,8 @@ pub async fn run(
         .add_service(metrics_grpc_service)
         .serve(grpc_addr);
 
-    info!("Starting OTLP gRPC collector on {}", grpc_addr);
-
     let http_collector_router = glint_collector::create_router(storage_arc);
     let http_collector_addr = "0.0.0.0:4318";
-
-    info!("Starting OTLP HTTP collector on {}", http_collector_addr);
 
     let http_collector_listener = tokio::net::TcpListener::bind(http_collector_addr).await?;
     let http_collector_task = tokio::spawn(async move {
@@ -62,12 +64,24 @@ pub async fn run(
         }
     });
 
-    info!("Glint is ready!");
-    info!("  OTLP gRPC endpoint: http://localhost:{}", grpc_port);
-    info!("  OTLP HTTP endpoint: http://localhost:4318");
-    info!("  REST API:           http://localhost:{}/api", port);
-    info!("  Health check:       http://localhost:{}/health", port);
-    info!("  Web UI:             http://localhost:{}", port);
+    println!("\n{}", "Listeners".yellow().bold());
+    println!("  OTLP gRPC  {}", format!("0.0.0.0:{}", grpc_port).cyan());
+    println!("  OTLP HTTP  {}", "0.0.0.0:4318".cyan());
+    println!("  API Server {}", format!("0.0.0.0:{}", port).cyan());
+
+    println!("\n{}", "Ready".green().bold());
+    println!(
+        "  Web UI    {}",
+        format!("http://localhost:{}", port).cyan()
+    );
+    println!(
+        "  API       {}",
+        format!("http://localhost:{}/api", port).dimmed()
+    );
+    println!(
+        "  Health    {}",
+        format!("http://localhost:{}/health", port).dimmed()
+    );
 
     tokio::select! {
         result = grpc_server => {
@@ -86,7 +100,7 @@ pub async fn run(
             }
         }
         _ = tokio::signal::ctrl_c() => {
-            info!("Shutting down gracefully...");
+            println!("\n{}", "Shutting down...".yellow());
         }
     }
 
