@@ -1,0 +1,12 @@
+consolidate-commits = true
+pre-release-hook = ["sh", "-c", "cd .. && git cliff --tag {{tag_name}} -o CHANGELOG.md"]
+push = false
+publish = false
+tag-message = "chore(release): prepare for {{tag_name}}"
+tag-prefix = "v"
+sign-tag = false
+sign-commit = false
+shared-version = true
+tag-name = "v{{version}}"
+enable-all-features = false
+verify = true
