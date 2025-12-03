@@ -2,11 +2,11 @@
 name = "faze-cli"
 version.workspace = true
 edition.workspace = true
-description = "Local-first observability for developers"
-license = "MIT"
+license.workspace = true
+description.workspace = true
+repository.workspace = true
 authors = ["Erick Jesus <erick.jesus2060@gmail.com>"]
 homepage = "https://github.com/ErickJ3/faze"
-repository = "https://github.com/ErickJ3/faze"
 keywords = ["observability", "tracing", "otlp", "telemetry", "monitoring"]
 categories = ["command-line-utilities", "development-tools"]
 
