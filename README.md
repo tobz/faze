@@ -2,6 +2,8 @@
 
 > Local-first observability for developers.
 
+"Faze" is pronounced like "phase" (/feɪz/)
+
 Faze is a lightweight OTLP collector with an embedded web interface. It provides a simple way to collect, store, and visualize telemetry data without requiring Docker or complex infrastructure setup.
 
 ## A look
