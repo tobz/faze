@@ -1,8 +1,39 @@
-# Changelog
+## [0.1.0] - 2025-12-03
 
-All notable changes to this project will be documented in this file.
+### 🚀 Features
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+- *(sqlite)* Migrate to sqlite
+- Add ui in release and server
+- Add ui in release and server
+- Add ui in release and server
+- *(collector)* Add a logs and metrics collector
+- *(ui)* First usable ui
+- *(ui)* First usable ui
 
-## [unreleased]
+### 💼 Other
+
+- Alter name to 'faze'
+
+### 🚜 Refactor
+
+- *(cli)* Separation of responsibilities to maintenance
+- *(cli)* Add a colored was added to make it prettier
+- *(response-time-chart)* Fix chartbar in response time, btw: remove mock project-dir, remove dark-theme-toggle, waterfall always open, vitest for testing.
+
+### 📚 Documentation
+
+- Update readme
+
+### ⚙️ Miscellaneous Tasks
+
+- *(clippy)* Fix clippy warnings
+- Add self-hosted github runner
+- Run fmt
+- Add ci for build ui
+- Add ci for build ui
+- Add ci for build ui
+- Add ci for build ui
+- *(cli)* Run clippy
+- Add initial changelog and release.toml
+- Update release
+- Update release

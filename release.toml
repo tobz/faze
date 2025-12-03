@@ -1,5 +1,5 @@
 consolidate-commits = true
-pre-release-hook = ["git", "cliff", "--tag", "{{tag_name}}", "-o", "../CHANGELOG.md"]
+pre-release-hook = ["sh", "-c", "cd .. && git cliff --tag {{tag_name}} -o CHANGELOG.md"]
 push = false
 publish = false
 tag-message = "chore(release): prepare for {{tag_name}}"
