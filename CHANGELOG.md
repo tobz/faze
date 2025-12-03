@@ -1,3 +1,14 @@
+## [0.1.1] - 2025-12-03
+
+### 🚜 Refactor
+
+- *(attributes)* Fix unknown in atrributes
+
+### ⚙️ Miscellaneous Tasks
+
+- Includes installs, for unix-like and windows
+- *(scripts)* Update readme to installs
+- *(readme)* Add screenshot in readme
 ## [0.1.0] - 2025-12-03
 
 ### 🚀 Features
@@ -45,3 +56,4 @@
 - Add mold in build release
 - *(crates)* Update description and license in all crates
 - *(crates)* Fix problem with build .deb
+- Release
